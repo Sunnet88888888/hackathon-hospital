@@ -40,7 +40,7 @@ Patients first register an account with the `patient` role, then create one pati
 - **Database**: PostgreSQL (Production) / SQLite (In-Memory for unit test speed)
 - **ORM**: SQLAlchemy 2.0 (Modern type-safe declarative mapping)
 - **Database Migrations**: Alembic
-- **Authentication**: JWT Tokens & Passlib (bcrypt hashing)
+- **Authentication**: JWT bearer tokens & Argon2id password hashing (`argon2-cffi`)
 - **Background Tasks**: FastAPI `BackgroundTasks` (Non-blocking notification simulation)
 - **Testing**: Pytest (With full coverage integration tests)
 - **Dockerization**: Multi-stage Dockerfile and Docker Compose support

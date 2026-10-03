@@ -1,19 +1,21 @@
 import jwt
 from datetime import datetime, timedelta, timezone
-from passlib.context import CryptContext
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 from app.config import settings
 
-# Explicitly use bcrypt for password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+ph = PasswordHasher()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verifies a plain password against an Argon2 hash string."""
     try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except Exception:
+        return ph.verify(hashed_password, plain_password)
+    except VerifyMismatchError:
         return False
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    """Generates a secure Argon2 id hash for a raw password string."""
+    return ph.hash(password)
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()

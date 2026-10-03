@@ -1,3 +1,6 @@
+from app.security import get_password_hash, verify_password
+
+
 def test_register_patient(client):
     payload = {
         "email": "patient@clinic.com",
@@ -84,3 +87,11 @@ def test_login_wrong_credentials(client):
     })
     assert response.status_code == 401
     assert "detail" in response.json()
+
+def test_argon2_password_hashing_supports_long_passwords():
+    password = "long-password-" * 10
+    password_hash = get_password_hash(password)
+
+    assert password_hash.startswith("$argon2id$")
+    assert verify_password(password, password_hash)
+    assert not verify_password("different-password", password_hash)
