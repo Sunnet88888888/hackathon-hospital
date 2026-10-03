@@ -1,6 +1,6 @@
 import datetime
 
-def test_prescription_flow(client):
+def test_prescription_flow(client, admin_headers):
     # Register and login doctor user
     client.post("/auth/register", json={
         "email": "doctor_jones@clinic.com",
@@ -20,20 +20,6 @@ def test_prescription_flow(client):
     doctors_resp = client.get("/doctors")
     doc_profile = [d for d in doctors_resp.json() if d["email"] == "doctor_jones@clinic.com"][0]
     doctor_id = doc_profile["id"]
-
-    # Register and login admin/receptionist to register patient and schedule appointment
-    client.post("/auth/register", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123",
-        "full_name": "Admin User",
-        "role": "admin"
-    })
-    admin_login = client.post("/auth/login", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123"
-    })
-    admin_token = admin_login.json()["access_token"]
-    admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
     # Register patient
     pat_resp = client.post("/patients", json={
@@ -73,6 +59,28 @@ def test_prescription_flow(client):
     assert presc_data["diagnosis"] == "Severe Migraine"
     assert presc_data["doctor_id"] == doctor_id
     assert presc_data["patient_id"] == patient_id
+
+    # A linked patient can read their own prescription but cannot create one
+    patient_account = client.post("/auth/register", json={
+        "email": "alice@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "Alice Cooper",
+        "role": "patient"
+    }).json()
+    link_resp = client.put(
+        f"/patients/{patient_id}",
+        json={"user_id": patient_account["id"]},
+        headers=admin_headers
+    )
+    assert link_resp.status_code == 200
+    patient_token = client.post("/auth/login", json={
+        "email": "alice@clinic.com",
+        "password": "patientpassword123"
+    }).json()["access_token"]
+    patient_headers = {"Authorization": f"Bearer {patient_token}"}
+    assert len(client.get("/prescriptions", headers=patient_headers).json()) == 1
+    assert client.get(f"/prescriptions/{presc_data['id']}", headers=patient_headers).status_code == 200
+    assert client.post("/prescriptions", json=prescription_payload, headers=patient_headers).status_code == 403
 
     # Verify appointment is automatically Completed
     appt_check = client.get(f"/appointments/{appt_id}", headers=admin_headers)

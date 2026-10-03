@@ -6,15 +6,15 @@ from typing import List, Optional
 from app.database import get_db
 from app.models import Appointment, Patient, Doctor, AuditLog, User
 from app.schemas import AppointmentCreate, AppointmentResponse, AppointmentUpdate, AppointmentStatusUpdate
-from app.routes.auth import RoleChecker, get_current_user
+from app.routes.auth import RoleChecker, get_patient_profile
 from app.utils.background import send_appointment_confirmation_email, send_appointment_reminder_email
 from app.utils.csv_export import export_appointments_to_csv
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
 # Role checkers
-admin_or_receptionist = RoleChecker(["admin", "receptionist"])
-all_roles = RoleChecker(["admin", "doctor", "receptionist"])
+admin_or_patient = RoleChecker(["admin", "patient"])
+all_roles = RoleChecker(["admin", "doctor", "patient"])
 admin_only = RoleChecker(["admin"])
 
 def generate_appointment_number() -> str:
@@ -44,10 +44,21 @@ def book_appointment(
     appt_in: AppointmentCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(admin_or_receptionist)
+    current_user: User = Depends(admin_or_patient)
 ):
+    """Book an appointment; patients book for themselves and admins may book for any patient."""
+    if current_user.role == "patient":
+        patient_profile = get_patient_profile(db, current_user)
+        if appt_in.patient_id is not None and appt_in.patient_id != patient_profile.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Patients can only book appointments for themselves")
+        patient_id = patient_profile.id
+    else:
+        if appt_in.patient_id is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="patient_id is required")
+        patient_id = appt_in.patient_id
+
     # Check if patient exists
-    patient = db.query(Patient).filter(Patient.id == appt_in.patient_id).first()
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -76,7 +87,7 @@ def book_appointment(
         
     new_appt = Appointment(
         appointment_number=appt_num,
-        patient_id=appt_in.patient_id,
+        patient_id=patient_id,
         doctor_id=appt_in.doctor_id,
         appointment_date=appt_in.appointment_date,
         time_slot=appt_in.time_slot,
@@ -160,6 +171,7 @@ def export_csv(
     db: Session = Depends(get_db),
     current_user: User = Depends(all_roles)
 ):
+    """Export filtered appointments as CSV, scoped to the signed-in doctor's or patient's own records."""
     query = get_filtered_appointments_query(
         patient_name=patient_name,
         doctor_name=doctor_name,
@@ -172,7 +184,11 @@ def export_csv(
     
     # If role is doctor, only return their own appointments
     if current_user.role == "doctor":
-        query = query.filter(Appointment.doctor_id == current_user.doctor_profile[0].id if current_user.doctor_profile else -1)
+        doctor = db.query(Doctor).filter(Doctor.user_id == current_user.id).first()
+        query = query.filter(Appointment.doctor_id == doctor.id if doctor else -1)
+    elif current_user.role == "patient":
+        patient = get_patient_profile(db, current_user)
+        query = query.filter(Appointment.patient_id == patient.id)
         
     appointments = query.all()
     csv_content = export_appointments_to_csv(appointments)
@@ -197,6 +213,7 @@ def get_appointments(
     db: Session = Depends(get_db),
     current_user: User = Depends(all_roles)
 ):
+    """List and filter appointments; doctors and patients see only their own records."""
     query = get_filtered_appointments_query(
         patient_name=patient_name,
         doctor_name=doctor_name,
@@ -214,6 +231,9 @@ def get_appointments(
         if not doc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor profile not found")
         query = query.filter(Appointment.doctor_id == doc.id)
+    elif current_user.role == "patient":
+        patient = get_patient_profile(db, current_user)
+        query = query.filter(Appointment.patient_id == patient.id)
         
     # Sorting
     if sort_by in ["id", "appointment_date", "status", "appointment_number"]:
@@ -234,6 +254,7 @@ def get_appointment_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(all_roles)
 ):
+    """Return an appointment visible to the signed-in user under their role's ownership rules."""
     appt = db.query(Appointment).filter(Appointment.id == id).first()
     if not appt:
         raise HTTPException(
@@ -249,6 +270,10 @@ def get_appointment_by_id(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied to other doctors' appointments"
             )
+    elif current_user.role == "patient":
+        patient = get_patient_profile(db, current_user)
+        if appt.patient_id != patient.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to another patient's appointment")
             
     return appt
 
@@ -259,6 +284,7 @@ def update_appointment(
     db: Session = Depends(get_db),
     current_user: User = Depends(all_roles)
 ):
+    """Update or reschedule an appointment; doctors may update their own status and patients may manage their own appointment."""
     appt = db.query(Appointment).filter(Appointment.id == id).first()
     if not appt:
         raise HTTPException(
@@ -283,13 +309,15 @@ def update_appointment(
                 detail="Doctors are only allowed to update the appointment status"
             )
             
-    elif current_user.role == "receptionist":
-        # Receptionist can update status, reschedule, etc., but cannot mark "Completed"
+    elif current_user.role == "patient":
+        patient = get_patient_profile(db, current_user)
+        if appt.patient_id != patient.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to modify another patient's appointment")
         update_dict = appt_update.model_dump(exclude_unset=True)
         if "status" in update_dict and update_dict["status"] == "Completed":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Receptionists cannot complete appointments. Only doctors can do so"
+                detail="Patients cannot complete appointments. Only doctors can do so"
             )
             
     # Business logic updates
@@ -341,6 +369,7 @@ def delete_appointment(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only)
 ):
+    """Permanently delete an appointment; admin access is required."""
     appt = db.query(Appointment).filter(Appointment.id == id).first()
     if not appt:
         raise HTTPException(

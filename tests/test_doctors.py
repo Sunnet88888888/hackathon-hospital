@@ -1,18 +1,4 @@
-def test_create_and_get_doctor(client):
-    # Register and login admin
-    client.post("/auth/register", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123",
-        "full_name": "Clinic Admin",
-        "role": "admin"
-    })
-    login_resp = client.post("/auth/login", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123"
-    })
-    token = login_resp.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
+def test_create_and_get_doctor(client, admin_headers):
     # Create doctor
     doc_payload = {
         "full_name": "Dr. John Doe",
@@ -23,11 +9,16 @@ def test_create_and_get_doctor(client):
         "consultation_fee": 1500.0,
         "available_timings": "Mon-Fri 09:00 - 13:00"
     }
-    create_resp = client.post("/doctors", json=doc_payload, headers=headers)
+    create_resp = client.post("/doctors", json=doc_payload, headers=admin_headers)
     assert create_resp.status_code == 201
     doc_data = create_resp.json()
     assert doc_data["full_name"] == "Dr. John Doe"
     assert doc_data["specialization"] == "Cardiology"
+    doctor_login = client.post("/auth/login", json={
+        "email": "johndoe@clinic.com",
+        "password": "doctor123"
+    })
+    assert doctor_login.status_code == 200
 
     # Get list of doctors
     list_resp = client.get("/doctors")
@@ -53,3 +44,8 @@ def test_create_doctor_unauthorized(client):
     }
     response = client.post("/doctors", json=doc_payload)
     assert response.status_code == 401
+    login_response = client.post("/auth/login", json={
+        "email": "unauthorized@clinic.com",
+        "password": "doctor123"
+    })
+    assert login_response.status_code == 401

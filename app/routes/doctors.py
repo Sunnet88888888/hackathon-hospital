@@ -18,6 +18,7 @@ def create_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only)
 ):
+    """Create a doctor profile and, when needed, its linked doctor account; admin access is required."""
     # Check if doctor email already exists
     existing_doc = db.query(Doctor).filter(Doctor.email == doctor_in.email).first()
     if existing_doc:
@@ -65,6 +66,7 @@ def get_doctors(
     order: str = "asc",
     db: Session = Depends(get_db)
 ):
+    """List doctor profiles with optional name or specialization filters, sorting, and pagination."""
     query = db.query(Doctor)
     
     # Search/Filters
@@ -88,6 +90,7 @@ def get_doctors(
 
 @router.get("/{id}", response_model=DoctorResponse)
 def get_doctor_by_id(id: int, db: Session = Depends(get_db)):
+    """Return the public profile for the requested doctor."""
     doctor = db.query(Doctor).filter(Doctor.id == id).first()
     if not doctor:
         raise HTTPException(
@@ -103,6 +106,7 @@ def update_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only)
 ):
+    """Update a doctor's profile fields; admin access is required."""
     doctor = db.query(Doctor).filter(Doctor.id == id).first()
     if not doctor:
         raise HTTPException(
@@ -125,6 +129,7 @@ def delete_doctor(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only)
 ):
+    """Delete a doctor profile; admin access is required."""
     doctor = db.query(Doctor).filter(Doctor.id == id).first()
     if not doctor:
         raise HTTPException(

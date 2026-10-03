@@ -1,35 +1,21 @@
-def test_reports_dashboard_access_and_metrics(client):
-    # Register and login admin
+def test_reports_dashboard_access_and_metrics(client, admin_headers):
+    # Register and login patient
     client.post("/auth/register", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123",
-        "full_name": "Clinic Admin",
-        "role": "admin"
+        "email": "patient@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "Clinic Patient",
+        "role": "patient"
     })
-    admin_login = client.post("/auth/login", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123"
+    patient_login = client.post("/auth/login", json={
+        "email": "patient@clinic.com",
+        "password": "patientpassword123"
     })
-    admin_token = admin_login.json()["access_token"]
-    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    patient_token = patient_login.json()["access_token"]
+    patient_headers = {"Authorization": f"Bearer {patient_token}"}
 
-    # Register and login receptionist
-    client.post("/auth/register", json={
-        "email": "receptionist@clinic.com",
-        "password": "receppassword123",
-        "full_name": "Clinic Receptionist",
-        "role": "receptionist"
-    })
-    recep_login = client.post("/auth/login", json={
-        "email": "receptionist@clinic.com",
-        "password": "receppassword123"
-    })
-    recep_token = recep_login.json()["access_token"]
-    recep_headers = {"Authorization": f"Bearer {recep_token}"}
-
-    # Try to access reports dashboard as receptionist (expecting 403 Forbidden)
-    resp_receptionist = client.get("/reports/dashboard", headers=recep_headers)
-    assert resp_receptionist.status_code == 403
+    # Patients cannot access reports dashboard
+    resp_patient = client.get("/reports/dashboard", headers=patient_headers)
+    assert resp_patient.status_code == 403
 
     # Access reports dashboard as admin (expecting 200 Success)
     resp_admin = client.get("/reports/dashboard", headers=admin_headers)

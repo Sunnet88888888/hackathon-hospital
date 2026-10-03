@@ -1,14 +1,14 @@
-def test_patient_crud(client):
-    # Register and login receptionist
+def test_patient_crud(client, admin_headers):
+    # Register and login patient
     client.post("/auth/register", json={
-        "email": "receptionist@clinic.com",
-        "password": "receppassword123",
-        "full_name": "Clinic Receptionist",
-        "role": "receptionist"
+        "email": "jane@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "Jane Smith",
+        "role": "patient"
     })
     login_resp = client.post("/auth/login", json={
-        "email": "receptionist@clinic.com",
-        "password": "receppassword123"
+        "email": "jane@clinic.com",
+        "password": "patientpassword123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -39,3 +39,34 @@ def test_patient_crud(client):
     update_resp = client.put(f"/patients/{p_id}", json=update_payload, headers=headers)
     assert update_resp.status_code == 200
     assert update_resp.json()["age"] == 33
+
+    # Patients cannot create multiple profiles or view all patient profiles
+    duplicate_resp = client.post("/patients", json=patient_payload, headers=headers)
+    assert duplicate_resp.status_code == 400
+    assert [patient["id"] for patient in client.get("/patients", headers=headers).json()] == [p_id]
+
+    # Admins can still create profiles, but patients cannot access another patient's profile
+    other_patient = client.post("/patients", json={
+        **patient_payload,
+        "full_name": "Other Patient",
+        "phone_number": "9876543212"
+    }, headers=admin_headers).json()
+    other_account = client.post("/auth/register", json={
+        "email": "other@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "Other Patient",
+        "role": "patient"
+    }).json()
+    link_resp = client.put(
+        f"/patients/{other_patient['id']}",
+        json={"user_id": other_account["id"]},
+        headers=admin_headers
+    )
+    assert link_resp.status_code == 200
+    assert client.get(f"/patients/{other_patient['id']}", headers=headers).status_code == 403
+    assert client.put(f"/patients/{other_patient['id']}", json={"age": 40}, headers=headers).status_code == 403
+    other_token = client.post("/auth/login", json={
+        "email": "other@clinic.com",
+        "password": "patientpassword123"
+    }).json()["access_token"]
+    assert client.get(f"/patients/{other_patient['id']}", headers={"Authorization": f"Bearer {other_token}"}).status_code == 200

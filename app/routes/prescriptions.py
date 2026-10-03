@@ -4,13 +4,13 @@ from typing import List, Optional
 from app.database import get_db
 from app.models import Prescription, Appointment, Doctor, Patient, User
 from app.schemas import PrescriptionCreate, PrescriptionResponse, PrescriptionUpdate
-from app.routes.auth import RoleChecker, get_current_user
+from app.routes.auth import RoleChecker, get_patient_profile
 from app.utils.background import notify_patient_prescription_created
 
 router = APIRouter(prefix="/prescriptions", tags=["Prescriptions"])
 
 doctor_only = RoleChecker(["doctor"])
-all_roles = RoleChecker(["admin", "doctor", "receptionist"])
+all_roles = RoleChecker(["admin", "doctor", "patient"])
 
 @router.post("", response_model=PrescriptionResponse, status_code=status.HTTP_201_CREATED)
 def create_prescription(
@@ -19,6 +19,7 @@ def create_prescription(
     db: Session = Depends(get_db),
     current_user: User = Depends(doctor_only)
 ):
+    """Create a prescription for an appointment assigned to the signed-in doctor and mark it completed."""
     # Find doctor profile from user
     doctor = db.query(Doctor).filter(Doctor.user_id == current_user.id).first()
     if not doctor:
@@ -90,6 +91,7 @@ def get_prescriptions(
     db: Session = Depends(get_db),
     current_user: User = Depends(all_roles)
 ):
+    """List prescriptions with optional filters; doctors and patients are limited to their own records."""
     query = db.query(Prescription)
     
     # Apply filters
@@ -107,6 +109,9 @@ def get_prescriptions(
             raise HTTPException(status_code=404, detail="Doctor profile not found")
         # Doctors can only see their own prescriptions
         query = query.filter(Prescription.doctor_id == doctor.id)
+    elif current_user.role == "patient":
+        patient = get_patient_profile(db, current_user)
+        query = query.filter(Prescription.patient_id == patient.id)
         
     return query.offset(skip).limit(limit).all()
 
@@ -116,6 +121,7 @@ def get_prescription_by_id(
     db: Session = Depends(get_db),
     current_user: User = Depends(all_roles)
 ):
+    """Return a prescription visible to the signed-in user under their role's ownership rules."""
     prescription = db.query(Prescription).filter(Prescription.id == id).first()
     if not prescription:
         raise HTTPException(
@@ -131,6 +137,10 @@ def get_prescription_by_id(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied to view other doctor's prescriptions"
             )
+    elif current_user.role == "patient":
+        patient = get_patient_profile(db, current_user)
+        if prescription.patient_id != patient.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to another patient's prescription")
             
     return prescription
 
@@ -141,6 +151,7 @@ def update_prescription(
     db: Session = Depends(get_db),
     current_user: User = Depends(doctor_only)
 ):
+    """Update a prescription created by the signed-in doctor."""
     doctor = db.query(Doctor).filter(Doctor.user_id == current_user.id).first()
     if not doctor:
         raise HTTPException(

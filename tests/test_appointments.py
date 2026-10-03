@@ -1,20 +1,6 @@
 import datetime
 
-def test_appointment_booking_and_double_booking(client):
-    # Register and login admin to create doctor
-    client.post("/auth/register", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123",
-        "full_name": "Clinic Admin",
-        "role": "admin"
-    })
-    admin_login = client.post("/auth/login", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123"
-    })
-    admin_token = admin_login.json()["access_token"]
-    admin_headers = {"Authorization": f"Bearer {admin_token}"}
-
+def test_appointment_booking_and_double_booking(client, admin_headers):
     # Register doctor profile
     doc_resp = client.post("/doctors", json={
         "full_name": "Dr. Sarah Connor",
@@ -27,19 +13,19 @@ def test_appointment_booking_and_double_booking(client):
     }, headers=admin_headers)
     doctor_id = doc_resp.json()["id"]
 
-    # Register and login receptionist to register patient and schedule appointment
+    # Register and login patient to create a profile and schedule an appointment
     client.post("/auth/register", json={
-        "email": "receptionist@clinic.com",
-        "password": "receppassword123",
-        "full_name": "Clinic Receptionist",
-        "role": "receptionist"
+        "email": "john@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "John Connor",
+        "role": "patient"
     })
-    recep_login = client.post("/auth/login", json={
-        "email": "receptionist@clinic.com",
-        "password": "receppassword123"
+    patient_login = client.post("/auth/login", json={
+        "email": "john@clinic.com",
+        "password": "patientpassword123"
     })
-    recep_token = recep_login.json()["access_token"]
-    recep_headers = {"Authorization": f"Bearer {recep_token}"}
+    patient_token = patient_login.json()["access_token"]
+    patient_headers = {"Authorization": f"Bearer {patient_token}"}
 
     # Create patient
     pat_resp = client.post("/patients", json={
@@ -50,19 +36,18 @@ def test_appointment_booking_and_double_booking(client):
         "address": "789 Broadway, Los Angeles",
         "blood_group": "AB-negative",
         "emergency_contact": "2223334445"
-    }, headers=recep_headers)
+    }, headers=patient_headers)
     patient_id = pat_resp.json()["id"]
 
     # Book first appointment
     appt_date = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     appt_payload = {
-        "patient_id": patient_id,
         "doctor_id": doctor_id,
         "appointment_date": appt_date,
         "time_slot": "10:00 - 10:30",
         "reason_for_visit": "Regular Checkup"
     }
-    book_resp = client.post("/appointments", json=appt_payload, headers=recep_headers)
+    book_resp = client.post("/appointments", json=appt_payload, headers=patient_headers)
     assert book_resp.status_code == 201
     appt_data = book_resp.json()
     assert appt_data["status"] == "Scheduled"
@@ -70,18 +55,30 @@ def test_appointment_booking_and_double_booking(client):
 
     # Try to book SECOND appointment for same doctor and same time slot (Double Booking)
     double_book_payload = {
-        "patient_id": patient_id,
         "doctor_id": doctor_id,
         "appointment_date": appt_date,
         "time_slot": "10:00 - 10:30",
         "reason_for_visit": "Second Opinion"
     }
-    double_resp = client.post("/appointments", json=double_book_payload, headers=recep_headers)
+    double_resp = client.post("/appointments", json=double_book_payload, headers=patient_headers)
     assert double_resp.status_code == 400
     assert "Double booking" in double_resp.json()["detail"]
 
     # Test CSV Export
-    csv_resp = client.get("/appointments/export/csv", headers=recep_headers)
+    csv_resp = client.get("/appointments/export/csv", headers=patient_headers)
     assert csv_resp.status_code == 200
     assert "text/csv" in csv_resp.headers["content-type"]
     assert "Appointment Number" in csv_resp.text
+    assert len(client.get("/appointments", headers=patient_headers).json()) == 1
+
+    # A patient cannot book on behalf of another profile
+    unauthorized_payload = {**appt_payload, "patient_id": patient_id + 1}
+    unauthorized_resp = client.post("/appointments", json=unauthorized_payload, headers=patient_headers)
+    assert unauthorized_resp.status_code == 403
+
+    # Patients may cancel their own appointment but cannot complete it
+    complete_resp = client.put(f"/appointments/{appt_data['id']}", json={"status": "Completed"}, headers=patient_headers)
+    assert complete_resp.status_code == 403
+    cancel_resp = client.put(f"/appointments/{appt_data['id']}", json={"status": "Cancelled"}, headers=patient_headers)
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["status"] == "Cancelled"

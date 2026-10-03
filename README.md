@@ -8,22 +8,29 @@ This is a premium, enterprise-ready backend platform built with **FastAPI** and 
 
 The system enforces strict RBAC checking at the API level:
 
-| Feature / Action | API Endpoint | Admin | Doctor | Receptionist |
+| Feature / Action | API Endpoint | Admin | Doctor | Patient |
 | :--- | :--- | :---: | :---: | :---: |
 | **Manage Doctors** | `POST/PUT/DELETE /doctors` | ✅ Yes | ❌ No | ❌ No |
 | **View Doctors List** | `GET /doctors` | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Register Patients** | `POST /patients` | ✅ Yes | ❌ No | ✅ Yes |
-| **Update Patient Details**| `PUT /patients/{id}` | ✅ Yes | ❌ No | ✅ Yes |
-| **View Patient Details** | `GET /patients/{id}` | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Book Appointment** | `POST /appointments` | ✅ Yes | ❌ No | ✅ Yes |
-| **Reschedule Appointment**| `PUT /appointments/{id}` | ✅ Yes | ❌ No | ✅ Yes |
-| **Cancel Appointment** | `PUT /appointments/{id}` (Status: Cancelled) | ✅ Yes | ❌ No | ✅ Yes |
+| **Create Patient Profile** | `POST /patients` | ✅ Yes | ❌ No | ✅ Own profile |
+| **Update Patient Details**| `PUT /patients/{id}` | ✅ Yes | ❌ No | ✅ Own profile |
+| **View Patient Details** | `GET /patients/{id}` | ✅ Yes | ✅ Yes | ✅ Own profile |
+| **Book Appointment** | `POST /appointments` | ✅ Yes | ❌ No | ✅ For self |
+| **View/Export Appointments** | `GET /appointments`, `GET /appointments/export/csv` | ✅ Yes | ✅ Own | ✅ Own |
+| **Reschedule Appointment**| `PUT /appointments/{id}` | ✅ Yes | ❌ No | ✅ Own |
+| **Cancel Appointment** | `PUT /appointments/{id}` (Status: Cancelled) | ✅ Yes | ❌ No | ✅ Own |
 | **Complete Appointment** | `PUT /appointments/{id}` (Status: Completed) | ✅ Yes | ✅ Yes | ❌ No |
 | **Create Prescriptions** | `POST /prescriptions` | ❌ No | ✅ Yes | ❌ No |
-| **View Prescriptions** | `GET /prescriptions` | ✅ Yes | ✅ Yes (Own) | ✅ Yes |
-| **Upload Medical Reports**| `POST /medical-records/upload` | ✅ Yes | ❌ No | ✅ Yes |
-| **Download Medical Reports**| `GET /medical-records/download/{id}` | ✅ Yes | ✅ Yes | ✅ Yes |
+| **View Prescriptions** | `GET /prescriptions` | ✅ Yes | ✅ Own | ✅ Own |
+| **Upload Medical Reports**| `POST /medical-records/upload` | ✅ Yes | ❌ No | ✅ Own |
+| **View/Download Medical Reports**| `GET /medical-records/{patient_id}`, `GET /medical-records/download/{id}` | ✅ Yes | ✅ Yes | ✅ Own |
 | **View Reports Dashboard**| `GET /reports/dashboard` | ✅ Yes | ❌ No | ❌ No |
+
+### Account Registration and Admin Provisioning
+
+Public `POST /auth/register` accepts `patient` and `doctor` roles only; attempts to register with `role: "admin"` are rejected with HTTP 422. Admin accounts must be provisioned directly in the database, and no unauthenticated API endpoint creates admin users. Doctors may register through `/auth/register`, while administrators can continue to create doctor accounts and profiles through the admin-protected `POST /doctors` endpoint.
+
+Patients first register an account with the `patient` role, then create one patient profile through `POST /patients`. That profile is linked to the account. Patient requests may omit `patient_id` when booking appointments or uploading records; the API resolves it from the authenticated account. Patients can access and modify only their own profile and data. Existing patient profiles remain unlinked after migration; an administrator can associate one by updating it with the registered patient's `user_id` using `PUT /patients/{id}`.
 
 ---
 
@@ -49,7 +56,7 @@ erDiagram
         string email UK
         string password_hash
         string full_name
-        string role "admin / doctor / receptionist"
+        string role "admin / doctor / patient"
         datetime created_at
     }
     Doctor {
@@ -64,6 +71,7 @@ erDiagram
     }
     Patient {
         int id PK
+        int user_id FK "Users, unique, nullable for admin-created or legacy profiles"
         string full_name
         int age
         string gender

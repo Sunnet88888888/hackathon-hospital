@@ -1,18 +1,4 @@
-def test_medical_records_upload_and_download(client):
-    # Register and login admin
-    client.post("/auth/register", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123",
-        "full_name": "Clinic Admin",
-        "role": "admin"
-    })
-    admin_login = client.post("/auth/login", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123"
-    })
-    admin_token = admin_login.json()["access_token"]
-    admin_headers = {"Authorization": f"Bearer {admin_token}"}
-
+def test_medical_records_upload_and_download(client, admin_headers):
     # Register patient
     pat_resp = client.post("/patients", json={
         "full_name": "Bob Vance",
@@ -60,3 +46,43 @@ def test_medical_records_upload_and_download(client):
     download_resp = client.get(f"/medical-records/download/{rec_id}", headers=admin_headers)
     assert download_resp.status_code == 200
     assert download_resp.content == b"test pdf content"
+
+    # Link a patient account to this profile and allow access to its own record
+    patient_account = client.post("/auth/register", json={
+        "email": "bob@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "Bob Vance",
+        "role": "patient"
+    }).json()
+    link_resp = client.put(
+        f"/patients/{patient_id}",
+        json={"user_id": patient_account["id"]},
+        headers=admin_headers
+    )
+    assert link_resp.status_code == 200
+    patient_token = client.post("/auth/login", json={
+        "email": "bob@clinic.com",
+        "password": "patientpassword123"
+    }).json()["access_token"]
+    patient_headers = {"Authorization": f"Bearer {patient_token}"}
+    assert client.get(f"/medical-records/{patient_id}", headers=patient_headers).status_code == 200
+    assert client.get(f"/medical-records/download/{rec_id}", headers=patient_headers).status_code == 200
+
+    # Patient cannot access another profile's records
+    other_patient = client.post("/patients", json={
+        "full_name": "Other Patient",
+        "age": 38,
+        "gender": "Female",
+        "phone_number": "5556667799",
+        "address": "Scranton, PA",
+        "blood_group": "O-positive",
+        "emergency_contact": "5556667788"
+    }, headers=admin_headers).json()
+    other_record = client.post(
+        "/medical-records/upload",
+        data={"patient_id": other_patient["id"]},
+        files={"file": ("other_report.pdf", b"other patient content", "application/pdf")},
+        headers=admin_headers
+    ).json()
+    assert client.get(f"/medical-records/{other_patient['id']}", headers=patient_headers).status_code == 403
+    assert client.get(f"/medical-records/download/{other_record['id']}", headers=patient_headers).status_code == 403

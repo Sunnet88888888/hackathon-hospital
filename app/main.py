@@ -43,6 +43,7 @@ app.include_router(reports.router)
 
 @app.get("/")
 def read_root():
+    """Return the API's online status and link to its interactive documentation."""
     return {
         "status": "online",
         "message": "Welcome to the Clinic Management System API",

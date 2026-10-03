@@ -7,13 +7,13 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6)
     full_name: str = Field(..., min_length=2)
-    role: str = Field(..., description="admin, doctor, or receptionist")
+    role: str = Field(..., description="doctor or patient")
 
     @field_validator("role")
     @classmethod
     def validate_role(cls, v: str) -> str:
-        if v not in ["admin", "doctor", "receptionist"]:
-            raise ValueError("Role must be one of: admin, doctor, receptionist")
+        if v not in ["doctor", "patient"]:
+            raise ValueError("Role must be one of: doctor, patient")
         return v
 
 class UserLogin(BaseModel):
@@ -84,6 +84,7 @@ class PatientCreate(BaseModel):
     emergency_contact: str = Field(..., min_length=5)
 
 class PatientUpdate(BaseModel):
+    user_id: Optional[int] = None
     full_name: Optional[str] = None
     age: Optional[int] = None
     gender: Optional[str] = None
@@ -109,7 +110,7 @@ class PatientResponse(BaseModel):
 
 # --- Appointment Schemas ---
 class AppointmentCreate(BaseModel):
-    patient_id: int
+    patient_id: Optional[int] = None
     doctor_id: int
     appointment_date: datetime.date
     time_slot: str = Field(..., description="e.g. '09:00 - 09:30'")

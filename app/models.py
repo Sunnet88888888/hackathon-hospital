@@ -11,10 +11,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(50))  # admin, doctor, receptionist
+    role: Mapped[str] = mapped_column(String(50))  # admin, doctor, patient
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     doctor_profile: Mapped[Optional["Doctor"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    patient_profile: Mapped[Optional["Patient"]] = relationship(back_populates="user")
 
 class Doctor(Base):
     __tablename__ = "doctors"
@@ -37,6 +38,7 @@ class Patient(Base):
     __tablename__ = "patients"
     
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), unique=True, nullable=True)
     full_name: Mapped[str] = mapped_column(String(255))
     age: Mapped[int] = mapped_column(Integer)
     gender: Mapped[str] = mapped_column(String(50))
@@ -46,6 +48,7 @@ class Patient(Base):
     emergency_contact: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
+    user: Mapped[Optional["User"]] = relationship(back_populates="patient_profile")
     appointments: Mapped[List["Appointment"]] = relationship(back_populates="patient", cascade="all, delete")
     prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="patient", cascade="all, delete")
     medical_records: Mapped[List["MedicalRecord"]] = relationship(back_populates="patient", cascade="all, delete")

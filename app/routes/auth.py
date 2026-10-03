@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import jwt
 from app.config import settings
 from app.database import get_db
-from app.models import User, Doctor
+from app.models import User, Doctor, Patient
 from app.schemas import UserRegister, UserResponse, UserLogin, Token
 from app.security import get_password_hash, verify_password, create_access_token
 
@@ -47,8 +47,18 @@ class RoleChecker:
             )
         return current_user
 
+def get_patient_profile(db: Session, current_user: User) -> Patient:
+    patient = db.query(Patient).filter(Patient.user_id == current_user.id).first()
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient profile not found for current user"
+        )
+    return patient
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(user_in: UserRegister, db: Session = Depends(get_db)):
+    """Create a public patient or doctor account; doctor registration also creates a basic doctor profile."""
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_in.email).first()
     if existing_user:
@@ -89,6 +99,7 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(login_in: UserLogin, db: Session = Depends(get_db)):
+    """Validate account credentials and return a bearer access token."""
     user = db.query(User).filter(User.email == login_in.email).first()
     if not user or not verify_password(login_in.password, user.password_hash):
         raise HTTPException(

@@ -17,6 +17,7 @@ def get_dashboard_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only)
 ):
+    """Return clinic-wide patient, doctor, and appointment summary metrics; admin access is required."""
     today = datetime.date.today()
     
     total_patients = db.query(func.count(Patient.id)).scalar() or 0
@@ -80,6 +81,7 @@ def get_appointments_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only)
 ):
+    """Return clinic-wide appointment counts grouped by status; admin access is required."""
     total = db.query(func.count(Appointment.id)).scalar() or 0
     scheduled = db.query(func.count(Appointment.id)).filter(Appointment.status == "Scheduled").scalar() or 0
     confirmed = db.query(func.count(Appointment.id)).filter(Appointment.status == "Confirmed").scalar() or 0
@@ -101,6 +103,7 @@ def get_doctors_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only)
 ):
+    """Return appointment counts for each doctor; admin access is required."""
     # Fetch appointment counts per doctor
     results = db.query(
         Doctor.id,

@@ -1,44 +1,76 @@
-def test_register_user(client):
+def test_register_patient(client):
     payload = {
-        "email": "admin@clinic.com",
-        "password": "adminpassword123",
-        "full_name": "Clinic Admin",
-        "role": "admin"
+        "email": "patient@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "Clinic Patient",
+        "role": "patient"
     }
     response = client.post("/auth/register", json=payload)
     assert response.status_code == 201
     data = response.json()
-    assert data["email"] == "admin@clinic.com"
-    assert data["role"] == "admin"
+    assert data["email"] == "patient@clinic.com"
+    assert data["role"] == "patient"
     assert "id" in data
+
+def test_register_doctor(client):
+    response = client.post("/auth/register", json={
+        "email": "doctor@clinic.com",
+        "password": "doctorpassword123",
+        "full_name": "Clinic Doctor",
+        "role": "doctor"
+    })
+    assert response.status_code == 201
+    doctors = client.get("/doctors").json()
+    assert any(doctor["email"] == "doctor@clinic.com" for doctor in doctors)
 
 def test_register_existing_user(client):
     payload = {
-        "email": "admin@clinic.com",
-        "password": "adminpassword123",
-        "full_name": "Clinic Admin",
-        "role": "admin"
+        "email": "patient@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "Clinic Patient",
+        "role": "patient"
     }
-    # Register once
-    client.post("/auth/register", json=payload)
-    # Register twice
+    assert client.post("/auth/register", json=payload).status_code == 201
     response = client.post("/auth/register", json=payload)
     assert response.status_code == 400
     assert response.json()["detail"] == "Email already registered"
 
-def test_login_success(client):
-    # Register user
-    client.post("/auth/register", json={
+def test_admin_registration_is_rejected(client):
+    response = client.post("/auth/register", json={
         "email": "admin@clinic.com",
         "password": "adminpassword123",
         "full_name": "Clinic Admin",
         "role": "admin"
     })
+    assert response.status_code == 422
+    login_response = client.post("/auth/login", json={
+        "email": "admin@clinic.com",
+        "password": "adminpassword123"
+    })
+    assert login_response.status_code == 401
+
+def test_unsupported_role_is_not_supported(client):
+    response = client.post("/auth/register", json={
+        "email": "unsupported@clinic.com",
+        "password": "password123",
+        "full_name": "Unsupported User",
+        "role": "unsupported"
+    })
+    assert response.status_code == 422
+
+def test_login_success(client):
+    # Register user
+    client.post("/auth/register", json={
+        "email": "patient@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "Clinic Patient",
+        "role": "patient"
+    })
     
     # Login
     response = client.post("/auth/login", json={
-        "email": "admin@clinic.com",
-        "password": "adminpassword123"
+        "email": "patient@clinic.com",
+        "password": "patientpassword123"
     })
     assert response.status_code == 200
     data = response.json()

@@ -5,6 +5,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.main import app
+from app.models import User
+from app.security import get_password_hash
 
 # Create in-memory SQLite database engine for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -37,3 +39,22 @@ def setup_db():
 def client():
     with TestClient(app) as c:
         yield c
+
+@pytest.fixture
+def admin_headers(client):
+    db = TestingSessionLocal()
+    db.add(User(
+        email="admin@clinic.com",
+        password_hash=get_password_hash("adminpassword123"),
+        full_name="Clinic Admin",
+        role="admin"
+    ))
+    db.commit()
+    db.close()
+
+    login_response = client.post("/auth/login", json={
+        "email": "admin@clinic.com",
+        "password": "adminpassword123"
+    })
+    token = login_response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
