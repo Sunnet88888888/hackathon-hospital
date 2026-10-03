@@ -71,13 +71,14 @@ def create_prescription(
     db.refresh(new_prescription)
     
     # Background Notification
-    background_tasks.add_task(
-        notify_patient_prescription_created,
-        patient_email=patient.phone_number + "@example.com",
-        patient_name=patient.full_name,
-        diagnosis=new_prescription.diagnosis,
-        doctor_name=doctor.full_name
-    )
+    if patient.user:
+        background_tasks.add_task(
+            notify_patient_prescription_created,
+            patient_email=patient.user.email,
+            patient_name=patient.full_name,
+            diagnosis=new_prescription.diagnosis,
+            doctor_name=doctor.full_name
+        )
     
     return new_prescription
 

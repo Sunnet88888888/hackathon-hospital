@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.main import app
+from app.config import settings
 from app.models import User
 from app.security import get_password_hash
 
@@ -26,6 +27,11 @@ def override_get_db():
         db.close()
 
 app.dependency_overrides[get_db] = override_get_db
+
+@pytest.fixture(autouse=True)
+def disable_smtp_delivery(monkeypatch):
+    monkeypatch.setattr(settings, "SMTP_USERNAME", "")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "")
 
 @pytest.fixture(autouse=True, scope="function")
 def setup_db():

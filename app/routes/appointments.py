@@ -111,25 +111,31 @@ def book_appointment(
     db.commit()
     
     # Background Tasks
-    background_tasks.add_task(
-        send_appointment_confirmation_email,
-        patient_email=patient.phone_number + "@example.com",  # Mock email or fallback
-        patient_name=patient.full_name,
-        appointment_number=new_appt.appointment_number,
-        appointment_date=new_appt.appointment_date.strftime("%Y-%m-%d"),
-        time_slot=new_appt.time_slot,
-        doctor_name=doctor.full_name
-    )
-    
-    background_tasks.add_task(
-        send_appointment_reminder_email,
-        patient_email=patient.phone_number + "@example.com",
-        patient_name=patient.full_name,
-        appointment_number=new_appt.appointment_number,
-        appointment_date=new_appt.appointment_date.strftime("%Y-%m-%d"),
-        time_slot=new_appt.time_slot,
-        doctor_name=doctor.full_name
-    )
+    if patient.user:
+        patient_email = patient.user.email
+        background_tasks.add_task(
+            send_appointment_confirmation_email,
+            patient_email=patient_email,
+            patient_name=patient.full_name,
+            appointment_number=new_appt.appointment_number,
+            appointment_date=new_appt.appointment_date,
+            time_slot=new_appt.time_slot,
+            doctor_name=doctor.full_name,
+            reason_for_visit=new_appt.reason_for_visit,
+            doctor_specialization=doctor.specialization,
+            doctor_qualification=doctor.qualification,
+            consultation_fee=doctor.consultation_fee
+        )
+        
+        background_tasks.add_task(
+            send_appointment_reminder_email,
+            patient_email=patient_email,
+            patient_name=patient.full_name,
+            appointment_number=new_appt.appointment_number,
+            appointment_date=new_appt.appointment_date.strftime("%Y-%m-%d"),
+            time_slot=new_appt.time_slot,
+            doctor_name=doctor.full_name
+        )
     
     return new_appt
 

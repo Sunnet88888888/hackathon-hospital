@@ -41,7 +41,7 @@ Patients first register an account with the `patient` role, then create one pati
 - **ORM**: SQLAlchemy 2.0 (Modern type-safe declarative mapping)
 - **Database Migrations**: Alembic
 - **Authentication**: JWT bearer tokens & Argon2id password hashing (`argon2-cffi`)
-- **Background Tasks**: FastAPI `BackgroundTasks` (Non-blocking notification simulation)
+- **Background Tasks**: FastAPI `BackgroundTasks` for appointment and prescription email notifications
 - **Testing**: Pytest (With full coverage integration tests)
 - **Dockerization**: Multi-stage Dockerfile and Docker Compose support
 
@@ -131,7 +131,7 @@ erDiagram
 1. **Doctor Double-Booking Prevention**: During appointment scheduling or rescheduling (`POST /appointments`, `PUT /appointments/{id}`), the system queries for any existing appointments on the same date and time slot for the selected doctor with active status (excluding Cancelled/No Show). If a conflict exists, a `400 Bad Request` is returned.
 2. **Automatic Appointment Completion**: When a doctor writes a prescription for an appointment via `POST /prescriptions`, the system automatically marks the corresponding appointment status as `Completed`.
 3. **Audit Log Generation**: Every change to an appointment (creation, rescheduling, cancellation, completion) generates an entry in the `AuditLog` mapping the user's role and name who triggered the update, along with status transitions.
-4. **FastAPI Background Tasks**: Simulates real-time patient notifications by outputting structured email confirmations and reminders to logging targets when appointments are created or prescriptions are written.
+4. **FastAPI Background Tasks**: Sends appointment confirmations, reminders, and prescription notifications to linked patient email addresses through authenticated SMTP.
 
 ---
 
@@ -152,7 +152,19 @@ SECRET_KEY=supersecretkeyclinicmanagement12345!@#$%
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 UPLOAD_DIR=uploads
+SMTP_HOST=smtp.mail.ru
+SMTP_PORT=465
+SMTP_USERNAME=your-mailbox@bk.ru
+SMTP_PASSWORD=your-mailbox-app-password
+SMTP_FROM_EMAIL=your-mailbox@bk.ru
+OPENAI_API_KEY=your-openai-api-key
+CLINIC_NAME=Название клиники
+CLINIC_CITY=Казань
+CLINIC_ADDRESS=Улица и номер дома
+CLINIC_CONTACT_PHONE=+7 (915) 163-07-01
 ```
+
+SMTP notifications use SSL on port 465; other configured ports use STARTTLS. Set these values in the ignored `.env` file or environment variables. Do not commit mail credentials; use a dedicated app password and revoke any credential that has been exposed.
 
 ### 2. Install Dependencies
 
