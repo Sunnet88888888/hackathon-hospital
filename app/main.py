@@ -1,3 +1,18 @@
+from mcp.server.lowlevel.server import Server as _McpServer
+_original_init = _McpServer.__init__
+
+def _patched_init(self, name, *args, **kwargs):
+    if args:
+        # Map the description positional argument to the instructions keyword argument
+        kwargs.setdefault("instructions", args[0])
+        kwargs.setdefault("version", "1.0.0")
+    return _original_init(self, name, **kwargs)
+
+_McpServer.__init__ = _patched_init
+
+
+
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -5,6 +20,11 @@ import os
 from app.config import settings
 from app.database import engine, Base
 from app.routes import auth, doctors, patients, appointments, prescriptions, records, reports, ai
+from fastapi_mcp import FastApiMCP
+
+
+
+
 
 # Automatically create tables for quick execution if needed
 Base.metadata.create_all(bind=engine)
@@ -51,3 +71,10 @@ def read_root():
         "message": "Welcome to the Clinic Management System API",
         "docs": "/docs"
     }
+
+
+
+
+
+mcp = FastApiMCP(app)
+mcp.mount()

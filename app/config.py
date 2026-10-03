@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     CLINIC_ADDRESS: str = ""
     CLINIC_CONTACT_PHONE: str = "+7 (915) 163-07-01"
     OPENAI_API_KEY: str = ""
+    MCP_SERVER_URL: str = "http://127.0.0.1:8000/mcp"
 
     model_config = SettingsConfigDict(
         env_file=".env",

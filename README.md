@@ -158,6 +158,7 @@ SMTP_USERNAME=your-mailbox@bk.ru
 SMTP_PASSWORD=your-mailbox-app-password
 SMTP_FROM_EMAIL=your-mailbox@bk.ru
 OPENAI_API_KEY=your-openai-api-key
+MCP_SERVER_URL=http://127.0.0.1:8000/mcp
 CLINIC_NAME=Название клиники
 CLINIC_CITY=Казань
 CLINIC_ADDRESS=Улица и номер дома
