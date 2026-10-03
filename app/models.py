@@ -1,8 +1,12 @@
 import datetime
+from time import timezone
 from typing import List, Optional
-from sqlalchemy import String, Integer, Float, Date, DateTime, ForeignKey, JSON
+from sqlalchemy import String, Integer, Float, Date, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
+
+def _utc_now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
 
 class User(Base):
     __tablename__ = "users"
@@ -12,10 +16,14 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(50))  # admin, doctor, patient
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     doctor_profile: Mapped[Optional["Doctor"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     patient_profile: Mapped[Optional["Patient"]] = relationship(back_populates="user")
+    conversations: Mapped[List["Conversation"]] = relationship(
+    back_populates="user",
+    cascade="all, delete-orphan",
+)
 
 class Doctor(Base):
     __tablename__ = "doctors"
@@ -46,7 +54,7 @@ class Patient(Base):
     address: Mapped[str] = mapped_column(String(500))
     blood_group: Mapped[str] = mapped_column(String(20))
     emergency_contact: Mapped[str] = mapped_column(String(100))
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     user: Mapped[Optional["User"]] = relationship(back_populates="patient_profile")
     appointments: Mapped[List["Appointment"]] = relationship(back_populates="patient", cascade="all, delete")
@@ -64,8 +72,8 @@ class Appointment(Base):
     time_slot: Mapped[str] = mapped_column(String(100))
     reason_for_visit: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(50), default="Scheduled")  # Scheduled, Confirmed, Completed, Cancelled, No Show
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
-    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
 
     patient: Mapped["Patient"] = relationship(back_populates="appointments")
     doctor: Mapped["Doctor"] = relationship(back_populates="appointments")
@@ -84,7 +92,7 @@ class Prescription(Base):
     dosage: Mapped[str] = mapped_column(String(255))
     instructions: Mapped[str] = mapped_column(String(500))
     follow_up_date: Mapped[Optional[datetime.date]] = mapped_column(Date, nullable=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     appointment: Mapped["Appointment"] = relationship(back_populates="prescription")
     doctor: Mapped["Doctor"] = relationship(back_populates="prescriptions")
@@ -98,7 +106,7 @@ class MedicalRecord(Base):
     file_name: Mapped[str] = mapped_column(String(255))
     file_path: Mapped[str] = mapped_column(String(500))
     file_type: Mapped[str] = mapped_column(String(50))  # pdf, jpg, png
-    uploaded_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    uploaded_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     patient: Mapped["Patient"] = relationship(back_populates="medical_records")
 
@@ -111,6 +119,72 @@ class AuditLog(Base):
     changed_by: Mapped[str] = mapped_column(String(255))  # user role + name
     previous_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     new_status: Mapped[str] = mapped_column(String(50))
-    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
 
     appointment: Mapped["Appointment"] = relationship(back_populates="audit_logs")
+
+
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    title: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship(
+        back_populates="conversations",
+    )
+
+    messages: Mapped[List["Message"]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+    )
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    role: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
+    content: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        nullable=False,
+    )
+
+    conversation: Mapped["Conversation"] = relationship(
+        back_populates="messages",
+    )

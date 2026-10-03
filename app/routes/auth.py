@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 import jwt
 from app.config import settings
@@ -7,24 +7,23 @@ from app.database import get_db
 from app.models import User, Doctor, Patient
 from app.schemas import UserRegister, UserResponse, UserLogin, Token
 from app.security import get_password_hash, verify_password, create_access_token
-from fastapi.security import OAuth2PasswordRequestForm
-
-
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# Support standard OAuth2 Flow
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+bearer_scheme = HTTPBearer(auto_error=False)
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if not token:
+    if not credentials:
         raise credentials_exception
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(credentials.credentials, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
         role: str = payload.get("role")
         if email is None or role is None:
@@ -101,16 +100,14 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(
-    # ЗАМЕНА: Вместо login_in: UserLogin используем OAuth2PasswordRequestForm
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    login_in: UserLogin,
+    db: Session = Depends(get_db),
 ):
     """Validate account credentials and return a bearer access token."""
+
+    user = db.query(User).filter(User.email == login_in.email).first()
     
-    # Swagger UI отправляет значение почты в поле form_data.username
-    user = db.query(User).filter(User.email == form_data.username).first()
-    
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not user or not verify_password(login_in.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -119,3 +116,14 @@ def login(
         
     access_token = create_access_token(data={"sub": user.email, "role": user.role})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    """Return the profile of the authenticated user."""
+    return current_user
+
+
+
+
+

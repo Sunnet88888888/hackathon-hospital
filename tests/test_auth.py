@@ -80,6 +80,34 @@ def test_login_success(client):
     assert "access_token" in data
     assert data["token_type"] == "bearer"
 
+def test_get_current_user_profile(client):
+    client.post("/auth/register", json={
+        "email": "patient@clinic.com",
+        "password": "patientpassword123",
+        "full_name": "Clinic Patient",
+        "role": "patient"
+    })
+    login_response = client.post("/auth/login", json={
+        "email": "patient@clinic.com",
+        "password": "patientpassword123"
+    })
+    token = login_response.json()["access_token"]
+
+    response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "patient@clinic.com"
+    assert response.json()["full_name"] == "Clinic Patient"
+    assert response.json()["role"] == "patient"
+    assert "id" in response.json()
+    assert "created_at" in response.json()
+    assert "password_hash" not in response.json()
+
+def test_get_current_user_profile_requires_authentication(client):
+    response = client.get("/auth/me")
+
+    assert response.status_code == 401
+
 def test_login_wrong_credentials(client):
     response = client.post("/auth/login", json={
         "email": "nonexistent@clinic.com",
