@@ -12,7 +12,7 @@ class UserRegister(BaseModel):
     @field_validator("role")
     @classmethod
     def validate_role(cls, v: str) -> str:
-        if v not in ["doctor", "patient"]:
+        if v not in ["doctor", "patient" ]:
             raise ValueError("Role must be one of: doctor, patient")
         return v
 
