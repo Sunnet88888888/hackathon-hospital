@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from openai import AsyncOpenAI, OpenAIError
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-
+from app.utils.ai_runner import ai_runner
 from app.config import settings
 from app.database import get_db
 from app.models import Conversation, Message, User
@@ -91,8 +91,9 @@ async def create_assistant_message(
     db: Session,
     conversation_id: int,
     context: list[Message],
+    user_token: str,
 ) -> Message:
-    response_text = await generate_ai_response(to_agent_messages(context))
+    response_text = await ai_runner(user_token=user_token, context=context)
     assistant_message = Message(
         conversation_id=conversation_id,
         role="assistant",
@@ -128,6 +129,12 @@ async def create_conversation(
 
     db.add(message)
     await db.commit()
+    
+    
+    agent_message = await create_assistant_message()
+    
+    
+    
 
     return {
         "conversation_id": conversation.id,
