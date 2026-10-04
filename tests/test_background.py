@@ -53,7 +53,16 @@ def test_notifications_send_email_through_authenticated_smtp(monkeypatch):
         consultation_fee=500,
     )
     background.send_appointment_reminder_email(
-        "patient@example.com", "Patient", "APT-001", "2026-10-04", "09:00", "Doctor"
+        "patient@example.com",
+        "Пациент Тестовый",
+        "APT-20261003-9138",
+        "2026-10-03",
+        "10:00 - 10:30",
+        "Кирилл",
+        reason_for_visit="Жалобы на головную боль",
+        doctor_specialization="General Medicine",
+        doctor_qualification="MBBS",
+        consultation_fee=500,
     )
     background.notify_patient_prescription_created(
         "patient@example.com", "Patient", "Diagnosis", "Doctor"
@@ -63,7 +72,7 @@ def test_notifications_send_email_through_authenticated_smtp(monkeypatch):
     assert [message["To"] for message in sent_messages] == ["patient@example.com"] * 3
     assert [message["Subject"] for message in sent_messages] == [
         "Подтверждение записи к врачу в клинику «Клиника Тест» 🩺",
-        "Appointment Reminder - APT-001",
+        "Напоминание о приёме в клинике «Клиника Тест» 🩺",
         "New Prescription Issued",
     ]
     confirmation_parts = sent_messages[0].get_payload()
@@ -78,3 +87,15 @@ def test_notifications_send_email_through_authenticated_smtp(monkeypatch):
     assert "Жалобы на головную боль" in html_body
     assert "500 ₽" in html_body
     assert "Казань, ул. Тестовая, 1" in html_body
+
+    reminder_parts = sent_messages[1].get_payload()
+    assert reminder_parts[0].get_content_type() == "text/plain"
+    assert reminder_parts[1].get_content_type() == "text/html"
+    reminder_html = reminder_parts[1].get_payload(decode=True).decode("utf-8")
+    assert "Скоро увидимся" in reminder_html
+    assert "03 октября 2026 г. (суббота)" in reminder_html
+    assert "APT-20261003-9138" in reminder_html
+    assert "10:00 – 10:30" in reminder_html
+    assert "Кирилл (General Medicine, квалификация: MBBS)" in reminder_html
+    assert "Жалобы на головную боль" in reminder_html
+    assert "500 ₽" in reminder_html

@@ -132,9 +132,13 @@ def book_appointment(
             patient_email=patient_email,
             patient_name=patient.full_name,
             appointment_number=new_appt.appointment_number,
-            appointment_date=new_appt.appointment_date.strftime("%Y-%m-%d"),
+            appointment_date=new_appt.appointment_date,
             time_slot=new_appt.time_slot,
-            doctor_name=doctor.full_name
+            doctor_name=doctor.full_name,
+            reason_for_visit=new_appt.reason_for_visit,
+            doctor_specialization=doctor.specialization,
+            doctor_qualification=doctor.qualification,
+            consultation_fee=doctor.consultation_fee
         )
     
     return new_appt
